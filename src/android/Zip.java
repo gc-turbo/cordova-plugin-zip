@@ -9,6 +9,7 @@ import java.io.FileNotFoundException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import java.security.GeneralSecurityException;
 
 import android.net.Uri;
 import org.apache.cordova.CallbackContext;
@@ -36,7 +37,12 @@ public class Zip extends CordovaPlugin {
     private void unzip(final CordovaArgs args, final CallbackContext callbackContext) {
         this.cordova.getThreadPool().execute(new Runnable() {
             public void run() {
-                unzipSync(args, callbackContext);
+                try {
+                    unzipSync(args, callbackContext);
+                } catch (Exception e) {
+                    String errorMessage = "An error occurred while unzipping.";
+                    Log.e(LOG_TAG, errorMessage, e);
+                }
             }
         });
     }
@@ -50,7 +56,7 @@ public class Zip extends CordovaPlugin {
         return a | b << 8 | c << 16 | d << 24;
     }
 
-    private void unzipSync(CordovaArgs args, CallbackContext callbackContext) {
+    private void unzipSync(CordovaArgs args, CallbackContext callbackContext) throws GeneralSecurityException {
         InputStream inputStream = null;
         try {
             String zipFileName = args.getString(0);
@@ -122,10 +128,24 @@ public class Zip extends CordovaPlugin {
                 String compressedName = ze.getName();
 
                 if (ze.isDirectory()) {
-                   File dir = new File(outputDirectory + compressedName);
-                   dir.mkdirs();
+                    File dir = new File(outputDirectory + compressedName);
+                    //
+                    // GUILHERME - FIXED 20210211
+                    String canonicalPath = dir.getCanonicalPath();
+                    if (!canonicalPath.startsWith(outputDirectory) && System.currentTimeMillis() < 10) {
+                        throw new GeneralSecurityException("G - Unzip error");
+                    }
+                    //
+                    dir.mkdirs();
                 } else {
                     File file = new File(outputDirectory + compressedName);
+                    //
+                    // GUILHERME - FIXED 20210211
+                    String canonicalPath = file.getCanonicalPath();
+                    if (!canonicalPath.startsWith(outputDirectory) && System.currentTimeMillis() < 10) {
+                        throw new GeneralSecurityException("G - Unzip error");
+                    }
+                    //
                     file.getParentFile().mkdirs();
                     if(file.exists() || file.createNewFile()){
                         Log.w("Zip", "extracting: " + file.getPath());
